@@ -1,0 +1,536 @@
+
+project:
+  name: "Inka Company"
+  type: "SaaS"
+  summary: "Inka Company adalah platform SaaS B2B untuk mengelola proses pengadaan perusahaan secara terpusat, mulai dari permintaan pembelian, pemeriksaan dan persetujuan berjenjang, hingga pembuatan Purchase Order (PO). Sistem menerapkan kontrol akses berbasis peran, approval workflow berbasis aturan, pembatasan anggaran, serta audit trail untuk memastikan setiap transaksi dapat dipertanggungjawabkan."
+  problem_to_solve: "Proses pengadaan yang dilakukan melalui email, chat, spreadsheet, dan dokumen manual sulit dipantau, rentan terhadap pembelian tanpa persetujuan, duplikasi pesanan, kesalahan nominal, penyalahgunaan kewenangan, dan kehilangan riwayat keputusan."
+  business_goal: "Membangun SaaS B2B multi-tenant yang membantu perusahaan mengendalikan pengeluaran, menstandarkan proses procurement, mempercepat persetujuan, meningkatkan transparansi, dan menyediakan fondasi produk berlangganan untuk banyak organisasi."
+  product_principles:
+    - "Approval harus ditegakkan oleh backend, bukan hanya tampilan frontend."
+    - "Setiap organisasi hanya boleh mengakses data tenant miliknya."
+    - "Purchase Order tidak boleh diterbitkan sebelum seluruh persetujuan wajib selesai."
+    - "Setiap perubahan penting harus dapat ditelusuri melalui audit trail."
+    - "Gunakan modular monolith agar implementasi awal mudah diuji dan dikembangkan."
+    - "Utamakan alur procurement yang sederhana, jelas, dan dapat diaudit."
+    - "Terinspirasi oleh pola produk Precoro, tanpa menyalin aset, merek, atau konten proprietary."
+
+users:
+  primary_users:
+    - "Pemilik perusahaan atau Organization Owner"
+    - "Administrator organisasi"
+    - "Karyawan atau Requester yang mengajukan pembelian"
+    - "Approver atau pejabat yang menyetujui permintaan"
+    - "Tim Procurement yang mengelola pembelian dan PO"
+    - "Tim Finance yang memantau anggaran dan transaksi"
+  roles:
+    - name: "platform_admin"
+      permissions: "Mengelola tenant, status organisasi, konfigurasi platform, dan pemantauan operasional lintas tenant sesuai kebutuhan. Tidak boleh menggunakan akses platform untuk membaca transaksi pelanggan tanpa kewenangan yang sah dan tercatat."
+    - name: "organization_owner"
+      permissions: "Mengelola organisasi, anggota, konfigurasi dasar, dan pengaturan langganan organisasinya. Tidak otomatis berhak menyetujui transaksi pembelian miliknya sendiri."
+    - name: "organization_admin"
+      permissions: "Mengelola anggota, departemen, pusat biaya, pemasok, katalog, konfigurasi workflow, dan kebijakan procurement sesuai kewenangan organisasi."
+    - name: "requester"
+      permissions: "Membuat, menyimpan sebagai draft, mengirim, dan melihat Purchase Request miliknya; melihat status serta riwayat keputusan. Tidak boleh menyetujui permintaannya sendiri kecuali kebijakan organisasi secara eksplisit mengizinkan dan kontrol konflik kepentingan tetap dipenuhi."
+    - name: "approver"
+      permissions: "Melihat dokumen yang ditugaskan kepadanya, menyetujui atau menolak pada tahap yang sedang menjadi kewenangannya, memberikan alasan keputusan, dan melihat konteks yang diperlukan untuk mengambil keputusan."
+    - name: "procurement_officer"
+      permissions: "Meninjau permintaan yang telah disetujui sesuai kebijakan, mengelola pemasok dan item, menyusun PO, serta memantau status pesanan. Tidak boleh melewati approval wajib."
+    - name: "finance"
+      permissions: "Melihat data anggaran, nominal, pusat biaya, dan laporan pengadaan sesuai izin. Tidak otomatis memiliki hak menyetujui PO tanpa penugasan atau kebijakan yang sesuai."
+    - name: "auditor"
+      permissions: "Memiliki akses baca-saja ke dokumen, keputusan, dan audit trail yang diizinkan. Tidak boleh mengubah atau menghapus transaksi."
+  authorization:
+    model: "RBAC dengan pembatasan tenant, ownership, dan kebijakan workflow."
+    rules:
+      - "Setiap request harus terikat pada organisasi aktif yang sah."
+      - "Setiap operasi backend wajib memeriksa autentikasi, tenant, dan permission."
+      - "Menyembunyikan tombol pada UI bukan pengganti otorisasi backend."
+      - "Pengguna tidak boleh mengubah role atau permission sendiri tanpa kewenangan."
+      - "Pemeriksaan akses diterapkan pada query, service, policy, dan endpoint yang relevan."
+
+scope:
+  mvp:
+    - "Landing page pemasaran Inka Company."
+    - "Registrasi, login, logout, verifikasi email, dan reset password."
+    - "Onboarding organisasi dan pembuatan workspace."
+    - "Isolasi data multi-tenant dengan satu workspace milik satu organisasi."
+    - "Undangan anggota organisasi dan pengelolaan keanggotaan."
+    - "Role dan permission awal yang telah ditentukan."
+    - "Pengelolaan departemen dan pusat biaya."
+    - "Master data pemasok."
+    - "Katalog item atau jasa beserta satuan dan harga dasar."
+    - "Pembuatan Purchase Request dengan item, jumlah, harga estimasi, tujuan, departemen, pusat biaya, dan tanggal kebutuhan."
+    - "Draft, edit sebelum pengajuan, submit, dan pelacakan Purchase Request."
+    - "Approval workflow berjenjang dengan urutan dan aturan yang dikonfigurasi organisasi."
+    - "Penentuan approver berdasarkan role, departemen, pusat biaya, dan threshold nominal."
+    - "Keputusan approve atau reject dengan alasan dan identitas pelaku."
+    - "Pencegahan approval oleh pengguna yang tidak berwenang atau dokumen yang bukan tahapnya."
+    - "Pencegahan persetujuan sendiri atau konflik kepentingan berdasarkan kebijakan."
+    - "Validasi anggaran sebelum pengajuan atau penerbitan PO sesuai konfigurasi."
+    - "Pembuatan PO dari Purchase Request yang sudah memenuhi semua persyaratan approval."
+    - "Nomor PO unik dalam ruang lingkup organisasi."
+    - "Detail PO, status, pemasok, item, jumlah, harga, dan total."
+    - "Alur perubahan dokumen yang mewajibkan review atau approval ulang jika perubahan bersifat material."
+    - "Daftar dokumen dengan pencarian, filter, sorting, dan pagination."
+    - "Dashboard requester, approver, procurement, dan admin sesuai peran."
+    - "Notifikasi dalam aplikasi untuk pengajuan, keputusan, dan tugas approval."
+    - "Audit trail untuk perubahan status, perubahan data penting, serta keputusan approval."
+    - "Ekspor atau cetak PO ke PDF dengan format yang konsisten."
+    - "Pengujian feature, authorization, tenant isolation, workflow, dan regression."
+    - "Dokumentasi instalasi, konfigurasi, database, testing, dan deployment."
+
+  later:
+    - "Paket langganan bulanan dan tahunan serta billing automation."
+    - "Trial, batas penggunaan, upgrade, downgrade, dan penghentian langganan."
+    - "Workflow paralel, delegasi approver, pengganti approver, dan SLA approval."
+    - "Budget planning, reservasi anggaran, dan laporan realisasi lebih mendalam."
+    - "Purchase Order berulang, blanket PO, dan service PO."
+    - "Goods receipt dan pencatatan penerimaan sebagian."
+    - "Pencocokan Purchase Request, PO, penerimaan barang, dan invoice."
+    - "Invoice management dan integrasi akuntansi."
+    - "Request for Quotation (RFQ) dan perbandingan penawaran supplier."
+    - "Supplier portal."
+    - "Multi-currency dan multi-entity."
+    - "Impor massal melalui CSV atau Excel."
+    - "Notifikasi email dan integrasi pesan bisnis."
+    - "API publik dan integrasi ERP."
+    - "Analitik pengeluaran, tren pembelian, dan supplier performance."
+    - "SSO dan autentikasi perusahaan tingkat lanjut."
+    - "Aplikasi mobile khusus."
+    - "AI untuk ekstraksi data penawaran atau rekomendasi procurement."
+
+  out_of_scope:
+    - "Mengkloning kode sumber, identitas visual, atau aset proprietary Precoro."
+    - "Implementasi seluruh modul Precoro dalam satu tahap."
+    - "Pembayaran supplier langsung melalui platform pada MVP."
+    - "Akuntansi atau general ledger penuh."
+    - "Integrasi ERP eksternal sebelum API dan kebutuhannya ditetapkan."
+    - "AI generatif atau pemrosesan dokumen otomatis pada MVP."
+    - "Aplikasi native Android atau iOS pada MVP."
+    - "Workflow yang dapat melewati seluruh kontrol approval."
+    - "Penghapusan permanen audit trail transaksi."
+    - "Fitur yang tidak tercantum dalam MVP tanpa persetujuan perubahan scope."
+
+pages:
+  - path: "/"
+    purpose: "Memperkenalkan Inka Company sebagai solusi procurement SaaS B2B."
+    components:
+      - "Navbar"
+      - "Hero dan CTA"
+      - "Ringkasan manfaat"
+      - "Ilustrasi workflow procurement"
+      - "Fitur utama"
+      - "Bagian kontrol approval"
+      - "Manfaat untuk tim procurement dan finance"
+      - "FAQ"
+      - "Footer"
+
+  - path: "/features"
+    purpose: "Menjelaskan fitur dan manfaat produk."
+    components:
+      - "Feature overview"
+      - "Purchase Request"
+      - "Approval Workflow"
+      - "Purchase Order"
+      - "Budget Control"
+      - "Audit Trail"
+
+  - path: "/pricing"
+    purpose: "Menampilkan paket langganan setelah harga dan batas paket ditentukan."
+    components:
+      - "Pricing cards"
+      - "Perbandingan fitur"
+      - "Billing period selector"
+      - "CTA konsultasi atau pendaftaran"
+    notes: "Harga dan limit paket tidak boleh dikarang sebelum ditetapkan."
+
+  - path: "/login"
+    purpose: "Memberi akses aman ke pengguna terdaftar."
+    components:
+      - "Email"
+      - "Password"
+      - "Remember me"
+      - "Reset password"
+      - "Login feedback"
+
+  - path: "/register"
+    purpose: "Mendaftarkan akun dan memulai onboarding organisasi."
+    components:
+      - "Nama"
+      - "Email"
+      - "Password"
+      - "Konfirmasi password"
+      - "Validasi"
+      - "Persetujuan ketentuan"
+
+  - path: "/onboarding"
+    purpose: "Membuat workspace organisasi dan menyiapkan data awal."
+    components:
+      - "Nama organisasi"
+      - "Informasi organisasi dasar"
+      - "Preferensi awal"
+      - "Konfirmasi workspace"
+
+  - path: "/app/dashboard"
+    purpose: "Menampilkan ringkasan aktivitas procurement berdasarkan izin pengguna."
+    components:
+      - "Sidebar"
+      - "Top navigation"
+      - "Kartu ringkasan"
+      - "Pending approvals"
+      - "Purchase Request terbaru"
+      - "PO terbaru"
+      - "Quick actions"
+
+  - path: "/app/purchase-requests"
+    purpose: "Menampilkan daftar Purchase Request dalam lingkup akses pengguna."
+    components:
+      - "Search"
+      - "Filter status"
+      - "Filter tanggal"
+      - "Filter departemen"
+      - "Tabel atau daftar responsif"
+      - "Pagination"
+      - "Create request CTA"
+
+  - path: "/app/purchase-requests/create"
+    purpose: "Membuat Purchase Request baru."
+    components:
+      - "Informasi permintaan"
+      - "Departemen dan pusat biaya"
+      - "Daftar item"
+      - "Kuantitas dan harga estimasi"
+      - "Tanggal kebutuhan"
+      - "Total estimasi"
+      - "Save draft"
+      - "Submit for approval"
+      - "Validation feedback"
+
+  - path: "/app/purchase-requests/{id}"
+    purpose: "Menampilkan detail, status, dan riwayat keputusan Purchase Request."
+    components:
+      - "Document summary"
+      - "Item table"
+      - "Status badge"
+      - "Approval timeline"
+      - "Decision history"
+      - "Action buttons sesuai permission"
+      - "Audit activity"
+
+  - path: "/app/approvals"
+    purpose: "Memusatkan dokumen yang memerlukan tindakan approver."
+    components:
+      - "Pending approvals"
+      - "Filter dokumen"
+      - "Nominal dan pemohon"
+      - "Approval deadline jika diaktifkan"
+      - "Quick view"
+      - "Action entry point"
+
+  - path: "/app/approvals/{id}"
+    purpose: "Membantu approver meninjau dan mengambil keputusan atas dokumen."
+    components:
+      - "Detail dokumen"
+      - "Ringkasan anggaran"
+      - "Approval step saat ini"
+      - "Approve action"
+      - "Reject action"
+      - "Required rejection reason"
+      - "Approval history"
+
+  - path: "/app/purchase-orders"
+    purpose: "Memantau seluruh PO yang dapat diakses pengguna."
+    components:
+      - "PO list"
+      - "Search and filters"
+      - "Supplier"
+      - "Nomor PO"
+      - "Tanggal"
+      - "Total"
+      - "Status"
+      - "Pagination"
+
+  - path: "/app/purchase-orders/create"
+    purpose: "Menyusun PO dari Purchase Request yang memenuhi persyaratan."
+    components:
+      - "Sumber Purchase Request"
+      - "Supplier"
+      - "Item dan harga"
+      - "Jumlah dan total"
+      - "Tanggal pesanan"
+      - "Informasi pengiriman dasar"
+      - "Review sebelum penerbitan"
+      - "Submit sesuai aturan approval PO"
+
+  - path: "/app/purchase-orders/{id}"
+    purpose: "Melihat detail dan siklus hidup PO."
+    components:
+      - "Nomor PO"
+      - "Informasi supplier"
+      - "Item dan total"
+      - "Status"
+      - "Approval history"
+      - "Related Purchase Request"
+      - "Print atau export PDF"
+      - "Audit activity"
+
+  - path: "/app/suppliers"
+    purpose: "Mengelola master data pemasok."
+    components:
+      - "Supplier list"
+      - "Nama dan kode supplier"
+      - "Kontak bisnis"
+      - "Status aktif"
+      - "Search"
+      - "Create dan edit form"
+
+  - path: "/app/catalog"
+    purpose: "Mengelola item dan jasa yang dapat diminta."
+    components:
+      - "Item list"
+      - "SKU atau kode"
+      - "Nama item"
+      - "Kategori"
+      - "Satuan"
+      - "Harga dasar"
+      - "Status aktif"
+
+  - path: "/app/organization"
+    purpose: "Mengelola anggota, departemen, pusat biaya, dan role."
+    components:
+      - "Member list"
+      - "Invitation"
+      - "Role assignment"
+      - "Department management"
+      - "Cost center management"
+      - "Access control"
+
+  - path: "/app/settings/approval-workflows"
+    purpose: "Mengatur urutan persetujuan dan aturan penugasan approver."
+    components:
+      - "Workflow list"
+      - "Document type"
+      - "Approval steps"
+      - "Approver assignment"
+      - "Amount thresholds"
+      - "Department atau cost center conditions"
+      - "Activation status"
+      - "Workflow validation"
+
+  - path: "/app/budgets"
+    purpose: "Memantau alokasi dan penggunaan anggaran pada tingkat MVP."
+    components:
+      - "Budget list"
+      - "Department atau cost center"
+      - "Period"
+      - "Allocated amount"
+      - "Committed amount"
+      - "Available amount"
+      - "Budget status"
+
+  - path: "/app/audit-logs"
+    purpose: "Menyediakan catatan perubahan dan keputusan yang dapat ditelusuri."
+    components:
+      - "Actor"
+      - "Action"
+      - "Entity reference"
+      - "Timestamp"
+      - "Relevant before/after summary"
+      - "Search dan filters"
+      - "Read-only detail"
+
+  - path: "/app/settings"
+    purpose: "Mengatur preferensi dasar organisasi dan profil pengguna."
+    components:
+      - "Profile settings"
+      - "Organization settings"
+      - "Notification preferences"
+      - "Security settings"
+
+tech:
+  frontend: "Laravel Blade templates dengan JavaScript seperlunya untuk interaksi UI."
+  backend: "Laravel 11, PHP, modular monolith dengan controller tipis, Form Request validation, Policies, Actions atau Services, Events, dan Jobs bila dibutuhkan."
+  database: "MySQL dengan foreign keys, unique constraints, indeks yang sesuai, dan transaksi database untuk operasi kritis."
+  styling: "Tailwind CSS dengan reusable Blade components dan design tokens."
+  authentication: "Laravel authentication dengan session, password hashing, email verification, reset password, dan middleware authorization."
+  hosting: "Belum ditentukan. Siapkan konfigurasi environment untuk staging dan production, HTTPS, queue worker jika digunakan, scheduled tasks, dan backup database."
+  integrations:
+    - "Email provider untuk verifikasi dan reset password; provider ditentukan kemudian."
+    - "Object storage untuk file jika upload dokumen diaktifkan pada tahap berikutnya."
+    - "Payment gateway untuk subscription pada tahap lanjutan; provider belum ditentukan."
+  architecture:
+    - "Gunakan modular monolith, bukan microservices untuk MVP."
+    - "Pisahkan domain Purchase Requests, Approvals, Purchase Orders, Suppliers, Budgets, Organization, dan Audit."
+    - "Jangan menaruh seluruh business logic di controller atau Blade."
+    - "Gunakan service/action yang dapat diuji untuk perubahan status dan keputusan approval."
+    - "Semua perubahan status penting dijalankan melalui transisi yang tervalidasi."
+  implementation_note: "Laravel 11 adalah versi yang diminta. Sebelum deployment production, verifikasi dukungan keamanan framework dan PHP yang dipilih; bila Laravel 11 tidak lagi mendapat security fixes, ajukan peningkatan versi sebagai keputusan teknis sebelum peluncuran."
+
+data:
+  entities:
+    - name: "Organization"
+      fields: ["id", "name", "slug", "status", "timezone", "created_at", "updated_at"]
+      relationships: ["has many memberships", "has many departments", "has many cost_centers", "has many suppliers", "has many purchase_requests", "has many purchase_orders"]
+
+    - name: "User"
+      fields: ["id", "name", "email", "password", "email_verified_at", "status", "created_at", "updated_at"]
+      relationships: ["belongs to many organizations through memberships", "may create purchase_requests", "may perform approval actions"]
+
+    - name: "Membership"
+      fields: ["id", "organization_id", "user_id", "role", "status", "invited_by", "joined_at"]
+      relationships: ["belongs to organization", "belongs to user"]
+      constraints: ["unique organization_id + user_id"]
+
+    - name: "Department"
+      fields: ["id", "organization_id", "name", "code", "manager_user_id", "status"]
+      relationships: ["belongs to organization", "has many purchase_requests"]
+
+    - name: "CostCenter"
+      fields: ["id", "organization_id", "name", "code", "budget_id", "status"]
+      relationships: ["belongs to organization", "may be referenced by purchase_requests and purchase_orders"]
+
+    - name: "Supplier"
+      fields: ["id", "organization_id", "code", "name", "email", "phone", "address", "status"]
+      relationships: ["belongs to organization", "has many purchase_orders"]
+
+    - name: "CatalogItem"
+      fields: ["id", "organization_id", "sku", "name", "description", "unit", "default_price", "currency", "status"]
+      relationships: ["belongs to organization", "may be referenced by purchase_request_items and purchase_order_items"]
+
+    - name: "PurchaseRequest"
+      fields: ["id", "organization_id", "request_number", "requester_id", "department_id", "cost_center_id", "purpose", "needed_by", "currency", "estimated_total", "status", "submitted_at", "created_at", "updated_at"]
+      relationships: ["belongs to organization", "belongs to requester", "has many purchase_request_items", "has many approval_instances", "may generate purchase_orders"]
+
+    - name: "PurchaseRequestItem"
+      fields: ["id", "purchase_request_id", "catalog_item_id", "description", "quantity", "unit", "estimated_unit_price", "line_total"]
+      relationships: ["belongs to purchase_request", "optionally belongs to catalog_item"]
+
+    - name: "ApprovalWorkflow"
+      fields: ["id", "organization_id", "name", "document_type", "priority", "conditions_json", "status", "version"]
+      relationships: ["belongs to organization", "has many approval_steps"]
+      constraints: ["workflow configuration changes must be validated and versioned"]
+
+    - name: "ApprovalStep"
+      fields: ["id", "approval_workflow_id", "step_order", "approver_role", "approver_user_id", "department_condition", "minimum_amount", "maximum_amount", "is_required"]
+      relationships: ["belongs to approval_workflow", "may assign approval_instances"]
+
+    - name: "ApprovalInstance"
+      fields: ["id", "organization_id", "document_type", "document_id", "workflow_version", "step_order", "approver_user_id", "status", "decision_at", "decision_reason"]
+      relationships: ["belongs to organization", "references a document and approval step"]
+      constraints: ["approval decision must be recorded with actor, timestamp, and applicable workflow version"]
+
+    - name: "PurchaseOrder"
+      fields: ["id", "organization_id", "po_number", "purchase_request_id", "supplier_id", "created_by", "order_date", "expected_delivery_date", "currency", "subtotal", "tax_total", "grand_total", "status", "issued_at"]
+      relationships: ["belongs to organization", "belongs to supplier", "may belong to purchase_request", "has many purchase_order_items", "has many approval_instances"]
+
+    - name: "PurchaseOrderItem"
+      fields: ["id", "purchase_order_id", "catalog_item_id", "description", "quantity", "unit", "unit_price", "line_total"]
+      relationships: ["belongs to purchase_order", "optionally belongs to catalog_item"]
+
+    - name: "Budget"
+      fields: ["id", "organization_id", "name", "department_id", "cost_center_id", "period_start", "period_end", "allocated_amount", "currency", "status"]
+      relationships: ["belongs to organization", "may apply to department or cost_center"]
+
+    - name: "AuditLog"
+      fields: ["id", "organization_id", "actor_user_id", "action", "entity_type", "entity_id", "before_json", "after_json", "reason", "ip_address", "created_at"]
+      relationships: ["belongs to organization", "references actor"]
+      constraints: ["append-only through application policy; no normal edit or delete operation"]
+
+    - name: "Notification"
+      fields: ["id", "organization_id", "user_id", "type", "title", "body", "read_at", "created_at"]
+      relationships: ["belongs to organization", "belongs to user"]
+
+    - name: "Subscription"
+      fields: ["id", "organization_id", "plan_code", "billing_period", "status", "starts_at", "ends_at"]
+      relationships: ["belongs to organization"]
+      notes: "Schema dan billing automation dapat diaktifkan pada fase subscription; aturan paket belum ditentukan."
+
+design:
+  style: "Modern B2B SaaS, profesional, bersih, berorientasi produktivitas, enterprise-ready, dan terinspirasi dari pola UX procurement Precoro tanpa menyalin identitas mereknya."
+  primary_color: "Biru profesional; nilai final ditetapkan melalui design system."
+  reference: "https://precoro.com/"
+  responsive: true
+  accessibility: "Gunakan kontras yang memadai, label form yang jelas, navigasi keyboard, focus state, pesan validasi, semantic HTML, serta indikator status yang tidak bergantung pada warna saja."
+  layout:
+    - "Marketing website menggunakan landing page yang jelas dengan CTA demo atau mulai menggunakan produk."
+    - "Aplikasi memakai sidebar navigasi, topbar, breadcrumb, tabel, filter, status badge, dan form terstruktur."
+    - "Tabel harus tetap dapat digunakan pada tablet dan mobile."
+    - "Gunakan desain yang konsisten untuk status draft, pending, approved, rejected, dan issued."
+    - "Tindakan sensitif harus memiliki konfirmasi dan umpan balik yang jelas."
+  ui_states:
+    - "Loading"
+    - "Empty state"
+    - "Validation error"
+    - "Permission denied"
+    - "Success feedback"
+    - "Server error"
+    - "Disabled action"
+    - "Pending approval"
+    - "Approval completed"
+    - "Rejected with reason"
+
+constraints:
+  deadline: "Belum ditentukan; pengerjaan dilakukan bertahap berdasarkan prioritas MVP."
+  budget: "Belum ditentukan."
+  language: "id"
+  compliance:
+    - "Terapkan prinsip perlindungan data pribadi yang relevan di Indonesia, termasuk UU Perlindungan Data Pribadi, sesuai penilaian hukum dan operasional."
+    - "Terapkan least privilege untuk akses pengguna."
+    - "Validasi input dan lakukan otorisasi di sisi server."
+    - "Gunakan CSRF protection, output escaping, secure session configuration, dan password hashing."
+    - "Jangan menyimpan password dalam bentuk plaintext."
+    - "Jangan mempercayai organization_id, role, total harga, atau status yang dikirim browser tanpa validasi server."
+    - "Simpan audit trail untuk keputusan approval dan perubahan transaksi penting."
+    - "Jangan mengizinkan pengguna mengubah audit log melalui antarmuka normal."
+    - "Gunakan database transaction untuk keputusan approval dan penerbitan PO."
+    - "Cegah race condition pada approval dan penomoran dokumen melalui locking atau constraint yang tepat."
+    - "Terapkan isolasi tenant pada setiap query dan operasi data."
+    - "Rahasiakan credential melalui environment variables."
+    - "Lakukan backup, pemantauan error, dan pengujian pemulihan sebelum production."
+    - "Jangan mengklaim kepatuhan sertifikasi tertentu sebelum audit dan bukti formal tersedia."
+
+security_rules:
+  approval_workflow:
+    - "Approval wajib dijalankan oleh pengguna yang ditugaskan atau role yang memenuhi aturan workflow aktif."
+    - "Dokumen tidak boleh langsung berstatus Approved hanya karena request dikirim."
+    - "Setiap keputusan harus memvalidasi status dokumen saat ini, urutan step, aktor, dan tenant."
+    - "Dokumen hanya dapat bergerak ke tahap berikutnya setelah seluruh persetujuan wajib pada tahap saat ini selesai."
+    - "Penolakan wajib memiliki alasan dan harus menghentikan alur sesuai kebijakan."
+    - "Pemohon tidak boleh menyetujui dokumennya sendiri secara default."
+    - "Perubahan nominal, item, supplier, atau data material setelah approval harus memicu evaluasi ulang dan approval ulang sesuai kebijakan."
+    - "Workflow yang telah dipakai dokumen tidak boleh diubah secara retroaktif tanpa kebijakan migrasi dan audit yang jelas."
+    - "Keputusan approval, perubahan status, dan penerbitan PO harus dicatat dalam audit trail."
+    - "Gunakan transaksi database dan penguncian yang sesuai untuk mencegah keputusan ganda."
+  purchase_order:
+    - "PO hanya boleh dibuat dari sumber yang sah atau melalui proses yang secara eksplisit diizinkan."
+    - "PO tidak boleh diterbitkan sebelum seluruh approval wajib selesai."
+    - "Total PO dihitung ulang di backend dari item, kuantitas, harga, pajak, dan aturan pembulatan."
+    - "Nomor PO harus unik dalam organisasi dan aman terhadap request bersamaan."
+    - "PO yang sudah diterbitkan tidak boleh diedit secara diam-diam; perubahan harus melalui revisi yang terlacak."
+  tenant_isolation:
+    - "Setiap model bisnis harus memiliki organization_id secara langsung atau melalui relasi yang tervalidasi."
+    - "Semua pencarian berdasarkan ID harus memvalidasi kepemilikan tenant."
+    - "Jangan mengandalkan ID acak sebagai pengganti otorisasi."
+    - "Uji akses lintas tenant untuk setiap domain utama."
+
+acceptance_criteria:
+  - "Pengguna dapat membuat akun, login, dan membuat atau bergabung dengan organisasi."
+  - "Pengguna hanya dapat mengakses organisasi yang menjadi anggotanya."
+  - "Administrator dapat mengundang anggota dan memberikan role yang sah."
+  - "Requester dapat membuat draft Purchase Request dan mengirimkannya untuk approval."
+  - "Sistem dapat menentukan workflow berdasarkan aturan yang dikonfigurasi."
+  - "Approver hanya dapat memutuskan dokumen yang menjadi kewenangannya dan berada pada tahap yang benar."
+  - "Approval oleh pemohon sendiri ditolak secara default."
+  - "Approval yang tidak sesuai urutan atau dilakukan dua kali ditolak secara aman."
+  - "Penolakan mencatat alasan, aktor, dan waktu."
+  - "Perubahan data material setelah approval memicu aturan review atau approval ulang."
+  - "Purchase Order tidak dapat diterbitkan jika approval wajib belum selesai."
+  - "Nomor PO tetap unik ketika beberapa pengguna membuat dokumen secara bersamaan."
+  - "Nilai total Purchase Request dan PO dihitung dan diverifikasi di backend."
+  - "Kontrol anggaran yang diaktifkan tidak dapat dilewati hanya dengan mengubah request browser."
+  - "Audit trail tersedia untuk keputusan approval dan perubahan dokumen penting."
+  - "Tidak ada akses baca atau tulis lintas tenant melalui endpoint, URL, atau manipulasi ID."
+  - "Semua halaman memiliki validasi, loading, empty, success, dan error state yang relevan."
+  - "Pengujian otomatis mencakup autentikasi, authorization, tenant isolation, approval workflow, budget rules, dan penerbitan PO."
+  - "Dokumentasi instalasi, konfigurasi environment, migrasi, seeding, testing, dan deployment tersedia."
+  - "Aplikasi dapat dijalankan secara lokal dengan instruksi yang terdokumentasi."
